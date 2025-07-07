@@ -22,16 +22,6 @@ if (missingVars.length > 0) {
     throw new Error(`Missing Firebase environment variables: ${missingVars.join(', ')}`)
 }
 
-// Debug: Log the configuration (remove in production)
-console.log('Firebase config loaded:', {
-    apiKey: requiredEnvVars.apiKey ? '✓' : '✗',
-    authDomain: requiredEnvVars.authDomain ? '✓' : '✗',
-    projectId: requiredEnvVars.projectId ? '✓' : '✗',
-    storageBucket: requiredEnvVars.storageBucket ? '✓' : '✗',
-    messagingSenderId: requiredEnvVars.messagingSenderId ? '✓' : '✗',
-    appId: requiredEnvVars.appId ? '✓' : '✗',
-    measurementId: requiredEnvVars.measurementId ? '✓' : '✗'
-})
 
 const firebaseConfig = {
     apiKey: requiredEnvVars.apiKey,

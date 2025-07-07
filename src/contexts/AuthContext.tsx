@@ -38,12 +38,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const convertFirebaseUser = (firebaseUser: FirebaseUser | null): User | null => {
     if (!firebaseUser) return null
     
-    return {
+    const user = {
       uid: firebaseUser.uid,
       displayName: firebaseUser.displayName,
       email: firebaseUser.email,
       photoURL: firebaseUser.photoURL
     }
+    
+    // Log user_id (Firebase UID) to console
+    console.log('User ID (Firebase UID):', user.uid)
+    console.log('User details:', user)
+    
+    return user
   }
 
   // Handle Google sign in
