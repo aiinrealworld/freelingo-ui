@@ -27,6 +27,13 @@ interface UserProgress {
   streak_days: number
 }
 
+interface UserInfo {
+  user_id: string
+  email: string
+  display_name?: string
+  created_at: string
+}
+
 class ApiError extends Error {
   constructor(public status: number, message: string) {
     super(message)
@@ -59,6 +66,18 @@ async function handleResponse<T>(response: Response): Promise<T> {
 }
 
 export const api = {
+  // User management
+  async getUserInfo(): Promise<UserInfo> {
+    const token = await getAuthToken()
+    const response = await fetch(`${API_BASE.replace('/api', '')}/auth/me`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    })
+    return handleResponse<UserInfo>(response)
+  },
+
   // Words management
   async getUserWords(userId: string): Promise<Word[]> {
     const token = await getAuthToken()
@@ -149,6 +168,18 @@ export const api = {
     return handleResponse<UserProgress>(response)
   },
 
+  // Fetch new words with examples for the user
+  async getNewWords(userId: string): Promise<Word[]> {
+    const token = await getAuthToken()
+    const response = await fetch(`${API_BASE}/new-words/${userId}`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    })
+    return handleResponse<Word[]>(response)
+  },
+
   // Health check
   async healthCheck(): Promise<{ status: string }> {
     const response = await fetch(`${API_BASE}/health`)
@@ -156,4 +187,4 @@ export const api = {
   }
 }
 
-export type { Word, WordCreate, DialogueResponse, UserProgress } 
+export type { Word, WordCreate, DialogueResponse, UserProgress, UserInfo } 

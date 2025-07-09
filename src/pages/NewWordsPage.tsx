@@ -8,52 +8,48 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 function NewWordsPage() {
   const navigate = useNavigate()
   const { user } = useAuth()
-  const [words, setWords] = useState<Word[]>([])
+  const [newWords, setNewWords] = useState<Word[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [addedWords, setAddedWords] = useState<{ [key: string]: boolean }>({})
 
   useEffect(() => {
     if (user?.uid) {
-      loadWords()
+      loadNewWords()
     }
   }, [user?.uid])
 
-  const loadWords = async () => {
+  const loadNewWords = async () => {
     try {
       setLoading(true)
       setError(null)
-      const userWords = await api.getUserWords(user!.uid)
-      setWords(userWords)
+      const words = await api.getNewWords(user!.uid)
+      setNewWords(words)
     } catch (err) {
-      console.error('Failed to load words:', err)
-      setError('Failed to load words. Please try again.')
+      console.error('Failed to load new words:', err)
+      setError('Failed to load new words. Please try again.')
     } finally {
       setLoading(false)
     }
   }
 
-  const handleMarkAsLearned = async (wordId: string) => {
+  const handleAddWord = async (word: Word) => {
+    if (!user?.uid) return
     try {
-      const updatedWord = await api.markWordLearned(wordId)
-      setWords(prevWords =>
-        prevWords.map(word =>
-          word.id === wordId ? updatedWord : word
-        )
-      )
+      await api.createWord({ word: word.word, translation: word.translation, example: word.example }, user.uid)
+      setAddedWords((prev) => ({ ...prev, [word.word]: true }))
     } catch (err) {
-      console.error('Failed to mark word as learned:', err)
-      setError('Failed to update word. Please try again.')
+      console.error('Failed to add word:', err)
+      // Optionally show a toast
     }
   }
-
-  const learnedCount = words.filter(word => word.learned).length
 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading words...</p>
+          <p className="text-gray-600">Loading new words...</p>
         </div>
       </div>
     )
@@ -64,7 +60,7 @@ function NewWordsPage() {
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <p className="text-red-600 mb-4">{error}</p>
-          <Button onClick={loadWords}>Try Again</Button>
+          <Button onClick={loadNewWords}>Try Again</Button>
         </div>
       </div>
     )
@@ -89,104 +85,61 @@ function NewWordsPage() {
 
       {/* Main Content */}
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Progress Section */}
         <div className="mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-2xl font-bold text-gray-900">Today's Vocabulary</h2>
-            <div className="text-sm text-gray-600">
-              {learnedCount} of {words.length} words learned
-            </div>
-          </div>
-          <div className="w-full bg-gray-200 rounded-full h-2">
-            <div 
-              className="bg-gradient-to-r from-blue-500 to-purple-600 h-2 rounded-full transition-all duration-300"
-              style={{ width: `${words.length > 0 ? (learnedCount / words.length) * 100 : 0}%` }}
-            ></div>
-          </div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">Today's New Words</h2>
         </div>
-
-        {/* Words Grid */}
-        {words.length === 0 ? (
+        {newWords.length === 0 ? (
           <div className="text-center py-12">
             <div className="text-4xl mb-4">📚</div>
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">No words yet</h3>
-            <p className="text-gray-600 mb-6">Add some words to get started with your learning journey!</p>
-            <Button onClick={() => navigate('/words')}>
-              Add Your First Word
+            <h3 className="text-xl font-semibold text-gray-900 mb-2">No new words available</h3>
+            <p className="text-gray-600 mb-6">Check back later for more new words!</p>
+            <Button onClick={() => navigate('/dashboard')}>
+              Back to Dashboard
             </Button>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {words.map((word) => (
-              <Card 
-                key={word.id}
-                className={`transition-all duration-200 ${
-                  word.learned 
-                    ? 'bg-green-50 border-green-200' 
-                    : 'hover:shadow-lg'
-                }`}
-              >
-                <CardHeader>
-                  <div className="flex items-center justify-between">
+            {newWords.map((word, idx) => (
+              <Card key={word.word + idx} className="transition-all duration-200 hover:shadow-lg">
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <div>
                     <CardTitle className="text-xl font-bold text-gray-900">
                       {word.word}
                     </CardTitle>
-                    {word.learned && (
-                      <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
-                        <span className="text-white text-sm">✓</span>
-                      </div>
+                    {word.translation && (
+                      <CardDescription className="text-lg font-medium text-blue-600">
+                        {word.translation}
+                      </CardDescription>
                     )}
                   </div>
-                  <CardDescription className="text-lg font-medium text-blue-600">
-                    {word.translation}
-                  </CardDescription>
+                  <div>
+                    {addedWords[word.word] ? (
+                      <span className="text-green-600 text-3xl" title="Added">✔️</span>
+                    ) : (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-green-600 hover:text-green-700"
+                        onClick={() => handleAddWord(word)}
+                        disabled={!!addedWords[word.word]}
+                        title="Add to Vocabulary"
+                        style={{ fontSize: '2.5rem', lineHeight: 1, padding: 0 }}
+                      >
+                        👍
+                      </Button>
+                    )}
+                  </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   {word.example && (
                     <div className="bg-gray-50 rounded-lg p-4">
-                      <p className="text-sm text-gray-600 mb-1">Example:</p>
+                      <p className="text-sm text-gray-600 mb-1">Usage:</p>
                       <p className="text-gray-800 italic">"{word.example}"</p>
                     </div>
                   )}
-                  <Button
-                    onClick={() => handleMarkAsLearned(word.id)}
-                    disabled={word.learned}
-                    className={`w-full ${
-                      word.learned 
-                        ? 'bg-green-500 text-white cursor-not-allowed' 
-                        : 'bg-blue-600 hover:bg-blue-700'
-                    }`}
-                  >
-                    {word.learned ? 'Learned ✓' : 'Mark as Learned'}
-                  </Button>
                 </CardContent>
               </Card>
             ))}
-          </div>
-        )}
-
-        {/* Completion Message */}
-        {words.length > 0 && learnedCount === words.length && (
-          <div className="mt-8 text-center">
-            <Card className="bg-gradient-to-r from-green-50 to-blue-50 border-green-200">
-              <CardContent className="p-6">
-                <div className="text-4xl mb-4">🎉</div>
-                <h3 className="text-xl font-bold text-gray-900 mb-2">
-                  Congratulations!
-                </h3>
-                <p className="text-gray-600 mb-4">
-                  You've learned all the new words for today. Great job!
-                </p>
-                <div className="space-x-4">
-                  <Button onClick={() => navigate('/dialogue')}>
-                    Practice in Dialogue
-                  </Button>
-                  <Button variant="outline" onClick={() => navigate('/dashboard')}>
-                    Back to Dashboard
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
           </div>
         )}
       </main>
