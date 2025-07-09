@@ -128,7 +128,7 @@ function AddEditWordsPage() {
                 ← Back to Dashboard
               </Button>
             </div>
-            <h1 className="text-xl font-bold text-gray-900">Add/Edit Words</h1>
+            <h1 className="text-xl font-bold text-gray-900">Vocabulary</h1>
             <div className="w-24"></div>
           </div>
         </div>
@@ -187,7 +187,7 @@ function AddEditWordsPage() {
                   
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Example Sentence (Optional)
+                      Usage Sentence (Optional)
                     </label>
                     <Input
                       value={formData.example}
@@ -255,21 +255,26 @@ function AddEditWordsPage() {
                           </div>
                           <div className="flex space-x-1 ml-4">
                             <Button
-                              size="sm"
-                              variant="outline"
+                              size="icon"
+                              variant="ghost"
                               onClick={() => handleEdit(word)}
                               disabled={editingId === word.id || submitting}
+                              aria-label="Edit"
+                              className="text-blue-600 hover:text-blue-800"
                             >
-                              Edit
+                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487a2.1 2.1 0 1 1 2.97 2.97L7.5 19.79l-4 1 1-4 13.362-13.303z" />
+                              </svg>
                             </Button>
                             <Button
-                              size="sm"
-                              variant="outline"
+                              size="icon"
+                              variant="ghost"
                               onClick={() => handleDelete(word.id)}
-                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                              className="text-red-600 hover:text-red-800"
+                              aria-label="Delete"
                               disabled={submitting}
                             >
-                              Delete
+                              <span style={{ fontSize: '1.5rem', lineHeight: 1 }}>👎</span>
                             </Button>
                           </div>
                         </div>
