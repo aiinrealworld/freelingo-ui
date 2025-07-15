@@ -7,6 +7,7 @@ import { Input } from '../components/ui/input'
 
 import { Progress } from '../components/ui/progress'
 import { useSpeechToText } from '../lib/useSpeechToText'
+import { useSpeechSynthesis } from '../lib/useSpeechSynthesis'
 
 interface Message {
   id: string
@@ -45,6 +46,15 @@ function DialoguePage() {
     isListening,
   } = useSpeechToText();
 
+  const {
+    speak,
+    speaking,
+    cancel: cancelTTS,
+    error: ttsError,
+    setLanguage: setTTSLanguage,
+    language: ttsLanguage,
+  } = useSpeechSynthesis({ lang: 'fr-FR' });
+
   // When transcript changes, set it as input text
   useEffect(() => {
     if (transcript) {
@@ -56,6 +66,21 @@ function DialoguePage() {
   useEffect(() => {
     if (sttError) setError(sttError);
   }, [sttError]);
+
+  // Speak the latest AI message when it is added
+  useEffect(() => {
+    if (messages.length > 0) {
+      const lastMsg = messages[messages.length - 1];
+      if (lastMsg.sender === 'ai' && lastMsg.text) {
+        speak(lastMsg.text);
+      }
+    }
+  }, [messages, speak]);
+
+  // Combine TTS errors
+  useEffect(() => {
+    if (ttsError) setError(ttsError);
+  }, [ttsError]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
