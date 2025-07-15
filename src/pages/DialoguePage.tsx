@@ -6,6 +6,7 @@ import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 
 import { Progress } from '../components/ui/progress'
+import { useSpeechToText } from '../lib/useSpeechToText'
 
 interface Message {
   id: string
@@ -26,7 +27,6 @@ function DialoguePage() {
     }
   ])
   const [inputText, setInputText] = useState('')
-  const [isRecording, setIsRecording] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -35,6 +35,27 @@ function DialoguePage() {
   const totalExchanges = 10
   const currentExchange = Math.min(messages.length, totalExchanges)
   const progress = (currentExchange / totalExchanges) * 100
+
+  const {
+    transcript,
+    status: sttStatus,
+    error: sttError,
+    startListening,
+    stopListening,
+    isListening,
+  } = useSpeechToText();
+
+  // When transcript changes, set it as input text
+  useEffect(() => {
+    if (transcript) {
+      setInputText(transcript);
+    }
+  }, [transcript]);
+
+  // Combine errors
+  useEffect(() => {
+    if (sttError) setError(sttError);
+  }, [sttError]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -87,27 +108,15 @@ function DialoguePage() {
     }
   }
 
-  const handleVoiceInput = () => {
-    if (!user?.uid) return
-    
-    setIsRecording(true)
-    setError(null)
-    
-    // Simulate voice-to-text (replace with real implementation)
-    setTimeout(() => {
-      const voiceResponses = [
-        'Bonjour, comment allez-vous?',
-        'Je vais très bien, merci.',
-        'Parlez-vous français?',
-        'Oui, un peu.',
-        'C\'est très bien!'
-      ]
-      
-      const randomVoiceResponse = voiceResponses[Math.floor(Math.random() * voiceResponses.length)]
-      setInputText(randomVoiceResponse)
-      setIsRecording(false)
-    }, 2000)
-  }
+  const handleMicClick = () => {
+    if (!user?.uid) return;
+    if (isListening) {
+      stopListening();
+    } else {
+      setError(null);
+      startListening();
+    }
+  };
 
   const handleEndSession = () => {
     navigate('/dashboard')
@@ -212,15 +221,13 @@ function DialoguePage() {
                 disabled={isLoading || !user?.uid}
               />
               <Button
-                onClick={handleVoiceInput}
-                disabled={isRecording || isLoading || !user?.uid}
+                onClick={handleMicClick}
+                disabled={isLoading || !user?.uid}
                 variant="outline"
                 size="icon"
-                className={`w-10 h-10 ${
-                  isRecording ? 'bg-red-100 border-red-300 text-red-600' : ''
-                }`}
+                className={`w-10 h-10 ${isListening ? 'bg-red-100 border-red-300 text-red-600' : ''}`}
               >
-                {isRecording ? (
+                {isListening ? (
                   <div className="w-4 h-4 bg-red-500 rounded-full animate-pulse"></div>
                 ) : (
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -236,7 +243,7 @@ function DialoguePage() {
                 Send
               </Button>
             </div>
-            {isRecording && (
+            {isListening && (
               <p className="text-sm text-red-600 mt-2 text-center">
                 Recording... Speak now
               </p>
