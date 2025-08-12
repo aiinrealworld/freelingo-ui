@@ -7,6 +7,7 @@ import DialoguePage from './pages/DialoguePage'
 import AddEditWordsPage from './pages/AddEditWordsPage'
 import ProtectedRoute from './components/ProtectedRoute'
 import { AuthProvider } from './contexts/AuthContext'
+import DialogueSessionPage from './pages/DialogueSessionPage';
 
 function AppRoutes() {
   const { user, loading } = useAuth()
@@ -50,6 +51,14 @@ function AppRoutes() {
           element={
             <ProtectedRoute>
               <DialoguePage />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/dialogue-session/:sessionId" 
+          element={
+            <ProtectedRoute>
+              <DialogueSessionPage />
             </ProtectedRoute>
           } 
         />

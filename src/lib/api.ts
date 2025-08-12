@@ -20,13 +20,6 @@ interface DialogueResponse {
   suggested_words: string[]
 }
 
-interface UserProgress {
-  total_words: number
-  learned_words: number
-  dialogue_sessions: number
-  streak_days: number
-}
-
 interface UserInfo {
   user_id: string
   email: string
@@ -63,6 +56,68 @@ async function handleResponse<T>(response: Response): Promise<T> {
     throw new ApiError(response.status, errorText)
   }
   return response.json()
+}
+
+// Types for dialogue sessions
+export interface DialogueSession {
+  session_id: string;
+  user_id: string;
+  messages: Message[];
+  started_at: string;
+  ended_at: string;
+}
+
+export interface SessionSummary {
+  session_id: string;
+  started_at: string;
+  ended_at: string;
+  message_count: number;
+}
+
+// Define Message type for dialogue sessions
+export interface Message {
+  id: string;
+  text: string;
+  sender: 'ai' | 'user';
+  timestamp: string;
+}
+
+// Save a dialogue session
+export async function saveDialogueSession(userId: string, messages: any[], startedAt: string, endedAt: string) {
+  const token = await getAuthToken();
+  const response = await fetch(`${API_BASE}/dialogue-session`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ user_id: userId, messages, started_at: startedAt, ended_at: endedAt })
+  });
+  return handleResponse<{ session_id: string, status: string }>(response);
+}
+
+// List dialogue sessions
+export async function getDialogueSessions(userId: string) {
+  const token = await getAuthToken();
+  const response = await fetch(`${API_BASE}/dialogue-sessions/${userId}`, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    }
+  });
+  return handleResponse<SessionSummary[]>(response);
+}
+
+// Get a single session
+export async function getDialogueSession(sessionId: string) {
+  const token = await getAuthToken();
+  const response = await fetch(`${API_BASE}/dialogue-session/${sessionId}`, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    }
+  });
+  return handleResponse<DialogueSession>(response);
 }
 
 export const api = {
@@ -156,18 +211,6 @@ export const api = {
     return handleResponse<DialogueResponse>(response)
   },
 
-  // User progress
-  async getUserProgress(userId: string): Promise<UserProgress> {
-    const token = await getAuthToken()
-    const response = await fetch(`${API_BASE}/user/${userId}/progress`, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      }
-    })
-    return handleResponse<UserProgress>(response)
-  },
-
   // Fetch new words with examples for the user
   async getNewWords(userId: string): Promise<Word[]> {
     const token = await getAuthToken()
@@ -187,4 +230,4 @@ export const api = {
   }
 }
 
-export type { Word, WordCreate, DialogueResponse, UserProgress, UserInfo } 
+export type { Word, WordCreate, DialogueResponse, UserInfo } 
