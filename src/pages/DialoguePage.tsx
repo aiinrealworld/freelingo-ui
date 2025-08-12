@@ -5,9 +5,9 @@ import { api } from '../lib/api'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 
-import { Progress } from '../components/ui/progress'
 import { useSpeechToText } from '../lib/useSpeechToText'
 import { useSpeechSynthesis } from '../lib/useSpeechSynthesis'
+import { saveDialogueSession } from '../lib/api'
 
 interface Message {
   id: string
@@ -17,12 +17,21 @@ interface Message {
 }
 
 function DialoguePage() {
+  // Prime the speech synthesis engine on mount
+  useEffect(() => {
+    if ('speechSynthesis' in window) {
+      const u = new window.SpeechSynthesisUtterance(' ');
+      u.volume = 0;
+      window.speechSynthesis.speak(u);
+    }
+  }, []);
+
   const navigate = useNavigate()
   const { user } = useAuth()
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
-      text: 'Bonjour! Comment allez-vous aujourd\'hui? Je suis votre tuteur de français.',
+      text: 'Comment ça va?',
       sender: 'ai',
       timestamp: new Date()
     }
@@ -32,14 +41,20 @@ function DialoguePage() {
   const [error, setError] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const [saving, setSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<string | null>(null);
 
-  const totalExchanges = 10
-  const currentExchange = Math.min(messages.length, totalExchanges)
-  const progress = (currentExchange / totalExchanges) * 100
+  // Compute session start and end times
+  const sessionStart = messages.length > 0 ? new Date(messages[0].timestamp).toISOString() : '';
+  const sessionEnd = messages.length > 0 ? new Date(messages[messages.length - 1].timestamp).toISOString() : '';
+
+  // Remove totalExchanges and progress logic
+  // const totalExchanges = 10
+  // const currentExchange = Math.min(messages.length, totalExchanges)
+  // const progress = (currentExchange / totalExchanges) * 100
 
   const {
     transcript,
-    status: sttStatus,
     error: sttError,
     startListening,
     stopListening,
@@ -48,11 +63,7 @@ function DialoguePage() {
 
   const {
     speak,
-    speaking,
-    cancel: cancelTTS,
     error: ttsError,
-    setLanguage: setTTSLanguage,
-    language: ttsLanguage,
   } = useSpeechSynthesis({ lang: 'fr-FR' });
 
   // When transcript changes, set it as input text
@@ -147,6 +158,22 @@ function DialoguePage() {
     navigate('/dashboard')
   }
 
+  const handleSaveSession = async () => {
+    if (!user?.uid || messages.length === 0) return;
+    setSaving(true);
+    setSaveStatus(null);
+    try {
+      // Convert timestamps to ISO strings for backend
+      const messagesToSave = messages.map(m => ({ ...m, timestamp: new Date(m.timestamp).toISOString() }));
+      await saveDialogueSession(user.uid, messagesToSave, sessionStart, sessionEnd);
+      setSaveStatus('Session saved!');
+    } catch (err) {
+      setSaveStatus('Failed to save session.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
@@ -166,23 +193,42 @@ function DialoguePage() {
               </Button>
             </div>
             <h1 className="text-xl font-bold text-gray-900">AI Dialogue</h1>
-            <Button variant="outline" size="sm" onClick={handleEndSession}>
-              End Session
-            </Button>
+            <div className="flex items-center space-x-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleEndSession}
+              >
+                End Session
+              </Button>
+              <Button
+                variant="default"
+                size="sm"
+                onClick={handleSaveSession}
+                disabled={saving || messages.length === 0}
+              >
+                {saving ? 'Saving...' : 'Save Session'}
+              </Button>
+            </div>
           </div>
         </div>
       </header>
+      {/* Show save status */}
+      {saveStatus && (
+        <div className={`max-w-4xl mx-auto mt-2 px-4`}>
+          <div className={`rounded p-2 text-center ${saveStatus.includes('saved') ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{saveStatus}</div>
+        </div>
+      )}
 
       {/* Progress Bar */}
       <div className="bg-white border-b px-4 py-3">
         <div className="max-w-4xl mx-auto">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-medium text-gray-700">
-              Progress: {currentExchange} of {totalExchanges} exchanges
+              Exchanges: {messages.length}
             </span>
-            <span className="text-sm text-gray-500">{Math.round(progress)}%</span>
           </div>
-          <Progress value={progress} className="h-2" />
+          {/* Optionally remove the Progress component or leave it out */}
         </div>
       </div>
 

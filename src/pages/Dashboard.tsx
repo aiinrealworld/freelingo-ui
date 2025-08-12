@@ -3,53 +3,58 @@ import { useNavigate } from 'react-router-dom'
 import { Button } from '../components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { useEffect, useState } from 'react'
-import { api, type UserProgress, type Word } from '../lib/api'
+import { api, type Word, getDialogueSessions, type SessionSummary } from '../lib/api'
+import { Link } from 'react-router-dom'
 
 function Dashboard() {
   const { user, signOut } = useAuth()
   const navigate = useNavigate()
-  const [progress, setProgress] = useState<UserProgress | null>(null)
-  const [progressLoading, setProgressLoading] = useState(true)
-  const [progressError, setProgressError] = useState<string | null>(null)
   
   // New state for enhanced dashboard
   const [recentWords, setRecentWords] = useState<Word[]>([])
   const [allWords, setAllWords] = useState<Word[]>([])
   const [wordsLoading, setWordsLoading] = useState(true)
   const [wordsError, setWordsError] = useState<string | null>(null)
+  const [sessions, setSessions] = useState<SessionSummary[]>([]);
+  const [sessionsLoading, setSessionsLoading] = useState(true);
+  const [sessionsError, setSessionsError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
       if (!user?.uid) return
-      
-      setProgressLoading(true)
       setWordsLoading(true)
-      setProgressError(null)
       setWordsError(null)
-      
       try {
-        // Fetch all data in parallel
-        const [progressData, userWords] = await Promise.all([
-          api.getUserProgress(user.uid),
-          api.getUserWords(user.uid)
-        ])
-        
-        setProgress(progressData)
+        // Only fetch user words
+        const userWords = await api.getUserWords(user.uid)
         setAllWords(userWords)
         setRecentWords(userWords.slice(0, 5)) // Get 5 most recent words
       } catch (err) {
         console.error('Failed to load dashboard data:', err)
-        setProgressError('Failed to load progress.')
         setWordsError('Failed to load words.')
       } finally {
-        setProgressLoading(false)
         setWordsLoading(false)
       }
     }
-    
     fetchDashboardData()
   }, [user?.uid])
 
+  useEffect(() => {
+    const fetchSessions = async () => {
+      if (!user?.uid) return;
+      setSessionsLoading(true);
+      setSessionsError(null);
+      try {
+        const data = await getDialogueSessions(user.uid);
+        setSessions(data);
+      } catch (err) {
+        setSessionsError('Failed to load dialogue sessions.');
+      } finally {
+        setSessionsLoading(false);
+      }
+    };
+    fetchSessions();
+  }, [user?.uid]);
 
 
   const handleSignOut = async () => {
@@ -163,47 +168,26 @@ function Dashboard() {
           ))}
         </div>
 
-        {/* Enhanced Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Vocabulary</p>
-                  {wordsLoading ? (
-                    <span className="w-6 h-6 border-2 border-purple-500 border-t-transparent rounded-full animate-spin inline-block"></span>
-                  ) : wordsError ? (
-                    <span className="text-red-500 text-sm">--</span>
-                  ) : (
-                    <p className="text-2xl font-bold text-gray-900">{allWords.length}</p>
-                  )}
-                </div>
-                <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-                  <span className="text-purple-600 text-xl">🎯</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Dialogue Sessions</p>
-                  {progressLoading ? (
-                    <span className="w-6 h-6 border-2 border-orange-500 border-t-transparent rounded-full animate-spin inline-block"></span>
-                  ) : progressError ? (
-                    <span className="text-red-500 text-sm">--</span>
-                  ) : (
-                    <p className="text-2xl font-bold text-gray-900">{progress?.dialogue_sessions ?? 0}</p>
-                  )}
-                </div>
-                <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
-                  <span className="text-orange-600 text-xl">💬</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+        {/* Vocabulary and Dialogue Sessions Count */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+          <div className="bg-white rounded-lg shadow p-6 flex items-center justify-between">
+            <div>
+              <div className="text-gray-500 text-sm mb-1">Vocabulary</div>
+              <div className="text-3xl font-bold">{allWords.length}</div>
+            </div>
+            <div className="w-12 h-12 bg-pink-100 rounded-lg flex items-center justify-center">
+              <span className="text-pink-600 text-2xl">🎯</span>
+            </div>
+          </div>
+          <div className="bg-white rounded-lg shadow p-6 flex items-center justify-between">
+            <div>
+              <div className="text-gray-500 text-sm mb-1">Dialogue Sessions</div>
+              <div className="text-3xl font-bold">{sessions.length}</div>
+            </div>
+            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+              <span className="text-blue-600 text-2xl">💬</span>
+            </div>
+          </div>
         </div>
 
         {/* Recent Activity Section */}
@@ -278,76 +262,45 @@ function Dashboard() {
             </CardContent>
           </Card>
 
-          {/* Learning Progress */}
+          {/* Recent Dialogue Sessions */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
-                <span>📊</span>
-                <span>Learning Progress</span>
+                <span>💬</span>
+                <span>Recent Dialogue Sessions</span>
               </CardTitle>
               <CardDescription>
-                Your learning statistics and achievements
+                Your recent AI dialogue sessions
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {progressLoading ? (
-                <div className="flex justify-center py-8">
-                  <span className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></span>
-                </div>
-              ) : progressError ? (
-                <div className="text-center py-8 text-red-500">
-                  Failed to load progress
-                </div>
+              {sessionsLoading ? (
+                <div className="text-gray-600">Loading...</div>
+              ) : sessionsError ? (
+                <div className="text-red-500">{sessionsError}</div>
+              ) : sessions.length === 0 ? (
+                <div className="text-gray-600">No dialogue sessions found.</div>
               ) : (
-                <div className="space-y-6">
-                  {/* Progress Bars */}
-                  <div>
-                    <div className="flex justify-between text-sm mb-2">
-                      <span>Learning Progress</span>
-                      <span>{progress?.learned_words ?? 0} / {progress?.total_words ?? 0}</span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div 
-                        className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                        style={{ 
-                          width: `${progress?.total_words ? (progress.learned_words / progress.total_words) * 100 : 0}%` 
-                        }}
-                      ></div>
-                    </div>
-                  </div>
-
-                  {/* Streak */}
-                  <div className="flex items-center justify-between p-4 bg-orange-50 rounded-lg">
-                    <div>
-                      <p className="font-medium text-gray-900">Current Streak</p>
-                      <p className="text-sm text-gray-600">Keep it going!</p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-2xl font-bold text-orange-600">{progress?.streak_days ?? 0}</p>
-                      <p className="text-xs text-gray-500">days</p>
-                    </div>
-                  </div>
-
-                  {/* Quick Actions */}
-                  <div className="space-y-2">
-                    <Button 
-                      className="w-full" 
-                      onClick={() => navigate('/dialogue')}
-                    >
-                      Start Dialogue Session
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      className="w-full"
-                      onClick={() => navigate('/new-words')}
-                    >
-                      Learn New Words
-                    </Button>
-                  </div>
-                </div>
+                <ul className="divide-y divide-gray-200 bg-white rounded-lg shadow">
+                  {sessions.slice(0, 5).map(session => (
+                    <li key={session.session_id} className="p-4 hover:bg-blue-50 transition">
+                      <Link to={`/dialogue-session/${session.session_id}`} className="block">
+                        <div className="flex justify-between items-center">
+                          <span className="font-medium text-blue-700">Session {session.session_id.slice(-6)}</span>
+                          <span className="text-sm text-gray-500">{new Date(session.started_at).toLocaleString()}</span>
+                        </div>
+                        <div className="text-sm text-gray-600 mt-1">
+                          {session.message_count} messages
+                        </div>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
               )}
             </CardContent>
           </Card>
+
+          {/* Removed Learning Progress section */}
         </div>
       </main>
     </div>
