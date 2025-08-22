@@ -17,6 +17,9 @@ interface Message {
 }
 
 function DialoguePage() {
+  const navigate = useNavigate()
+  const { user } = useAuth()
+
   // Prime the speech synthesis engine on mount
   useEffect(() => {
     if ('speechSynthesis' in window) {
@@ -26,16 +29,56 @@ function DialoguePage() {
     }
   }, []);
 
-  const navigate = useNavigate()
-  const { user } = useAuth()
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: '1',
-      text: 'Comment ça va?',
-      sender: 'ai',
-      timestamp: new Date()
-    }
-  ])
+  // Start the conversation with AI when component mounts
+  useEffect(() => {
+    const startConversation = async () => {
+      if (!user?.uid) return;
+      
+      setIsLoading(true);
+      try {
+        const response = await api.sendMessage('', user.uid);
+        
+        // Extract AI's reply from the transcript
+        if (response.transcript && response.transcript.length > 0) {
+          const lastEntry = response.transcript[response.transcript.length - 1];
+          const aiText = lastEntry.ai_turn.ai_reply.text;
+          
+          const aiMessage: Message = {
+            id: Date.now().toString(),
+            text: aiText,
+            sender: 'ai',
+            timestamp: new Date()
+          }
+          
+          setMessages([aiMessage]);
+        } else {
+          // Fallback if no transcript
+          const fallbackMessage: Message = {
+            id: Date.now().toString(),
+            text: 'Bonjour! Comment puis-je vous aider aujourd\'hui?',
+            sender: 'ai',
+            timestamp: new Date()
+          }
+          setMessages([fallbackMessage]);
+        }
+      } catch (err) {
+        console.error('Failed to start conversation:', err);
+        // Add a fallback message if the API fails
+        const fallbackMessage: Message = {
+          id: Date.now().toString(),
+          text: 'Bonjour! Comment puis-je vous aider aujourd\'hui?',
+          sender: 'ai',
+          timestamp: new Date()
+        }
+        setMessages([fallbackMessage]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    startConversation();
+  }, [user?.uid]);
+  const [messages, setMessages] = useState<Message[]>([])
   const [inputText, setInputText] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -44,9 +87,7 @@ function DialoguePage() {
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<string | null>(null);
 
-  // Compute session start and end times
-  const sessionStart = messages.length > 0 ? new Date(messages[0].timestamp).toISOString() : '';
-  const sessionEnd = messages.length > 0 ? new Date(messages[messages.length - 1].timestamp).toISOString() : '';
+  // Session start and end times are now calculated at save time
 
   // Remove totalExchanges and progress logic
   // const totalExchanges = 10
@@ -63,7 +104,6 @@ function DialoguePage() {
 
   const {
     speak,
-    error: ttsError,
   } = useSpeechSynthesis({ lang: 'fr-FR' });
 
   // When transcript changes, set it as input text
@@ -88,10 +128,26 @@ function DialoguePage() {
     }
   }, [messages, speak]);
 
-  // Combine TTS errors
-  useEffect(() => {
-    if (ttsError) setError(ttsError);
-  }, [ttsError]);
+  // Swallow TTS errors - they don't affect user experience
+  // useEffect(() => {
+  //   if (ttsError) setError(ttsError);
+  // }, [ttsError]);
+
+  // Auto-save functionality - no user warnings needed
+  // useEffect(() => {
+  //   const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+  //     if (messages.length > 2) { // More than just the initial AI message and one user response
+  //       e.preventDefault();
+  //       e.returnValue = 'You have unsaved dialogue messages. Are you sure you want to leave?';
+  //       return e.returnValue;
+  //     }
+  //   };
+
+  //   window.addEventListener('beforeunload', handleBeforeUnload);
+  //   return () => {
+  //     window.removeEventListener('beforeunload', handleBeforeUnload);
+  //   };
+  // }, [messages.length]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -119,14 +175,29 @@ function DialoguePage() {
     try {
       const response = await api.sendMessage(inputText, user.uid)
       
-      const aiMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        text: response.response,
-        sender: 'ai',
-        timestamp: new Date()
-      }
+      // Extract AI's reply from the transcript
+      if (response.transcript && response.transcript.length > 0) {
+        const lastEntry = response.transcript[response.transcript.length - 1];
+        const aiText = lastEntry.ai_turn.ai_reply.text;
+        
+        const aiMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          text: aiText,
+          sender: 'ai',
+          timestamp: new Date()
+        }
 
-      setMessages(prev => [...prev, aiMessage])
+        setMessages(prev => [...prev, aiMessage])
+      } else {
+        // Fallback if no transcript
+        const fallbackMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          text: 'Je ne comprends pas. Pouvez-vous répéter?',
+          sender: 'ai',
+          timestamp: new Date()
+        }
+        setMessages(prev => [...prev, fallbackMessage])
+      }
     } catch (err) {
       console.error('Failed to send message:', err)
       setError('Failed to send message. Please try again.')
@@ -154,8 +225,27 @@ function DialoguePage() {
     }
   };
 
-  const handleEndSession = () => {
-    navigate('/dashboard')
+  const handleEndSession = async () => {
+    if (user?.uid && messages.length > 0) {
+      try {
+        // Calculate session times at the moment of saving
+        const currentSessionStart = messages.length > 0 ? new Date(messages[0].timestamp).toISOString() : '';
+        const currentSessionEnd = messages.length > 0 ? new Date(messages[messages.length - 1].timestamp).toISOString() : '';
+        
+        // Convert timestamps to ISO strings for backend
+        const messagesToSave = messages.map(m => ({ ...m, timestamp: new Date(m.timestamp).toISOString() }));
+        await saveDialogueSession(user.uid, messagesToSave, currentSessionStart, currentSessionEnd);
+        // Navigate immediately after saving
+        navigate('/dashboard');
+      } catch (err) {
+        console.error('Failed to save session:', err);
+        // Still navigate away even if save fails
+        navigate('/dashboard');
+      }
+    } else {
+      // If no messages or no user, just navigate away
+      navigate('/dashboard');
+    }
   }
 
   const handleSaveSession = async () => {
@@ -163,9 +253,13 @@ function DialoguePage() {
     setSaving(true);
     setSaveStatus(null);
     try {
+      // Calculate session times at the moment of saving
+      const currentSessionStart = messages.length > 0 ? new Date(messages[0].timestamp).toISOString() : '';
+      const currentSessionEnd = messages.length > 0 ? new Date(messages[messages.length - 1].timestamp).toISOString() : '';
+      
       // Convert timestamps to ISO strings for backend
       const messagesToSave = messages.map(m => ({ ...m, timestamp: new Date(m.timestamp).toISOString() }));
-      await saveDialogueSession(user.uid, messagesToSave, sessionStart, sessionEnd);
+      await saveDialogueSession(user.uid, messagesToSave, currentSessionStart, currentSessionEnd);
       setSaveStatus('Session saved!');
     } catch (err) {
       setSaveStatus('Failed to save session.');
