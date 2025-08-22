@@ -3,10 +3,18 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { getDialogueSession, DialogueSession } from '../lib/api';
 import { Button } from '../components/ui/button';
 
+interface DisplayMessage {
+  id: string;
+  text: string;
+  sender: 'ai' | 'user';
+  timestamp: string;
+}
+
 function DialogueSessionPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
   const [session, setSession] = useState<DialogueSession | null>(null);
+  const [displayMessages, setDisplayMessages] = useState<DisplayMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -18,6 +26,35 @@ function DialogueSessionPage() {
       try {
         const data = await getDialogueSession(sessionId);
         setSession(data);
+        
+        // Convert transcript to display messages
+        const messages: DisplayMessage[] = [];
+        
+        if (data.messages.transcript) {
+          data.messages.transcript.forEach((entry, index) => {
+            // Add AI message first (AI starts the conversation)
+            if (entry.ai_turn?.ai_reply?.text) {
+              messages.push({
+                id: `ai-${index}`,
+                text: entry.ai_turn.ai_reply.text,
+                sender: 'ai',
+                timestamp: data.started_at // We don't have individual timestamps, use session start
+              });
+            }
+            
+            // Add user response
+            if (entry.user_turn?.text) {
+              messages.push({
+                id: `user-${index}`,
+                text: entry.user_turn.text,
+                sender: 'user',
+                timestamp: data.started_at // We don't have individual timestamps, use session start
+              });
+            }
+          });
+        }
+        
+        setDisplayMessages(messages);
       } catch (err) {
         setError('Failed to load session.');
       } finally {
@@ -48,10 +85,10 @@ function DialogueSessionPage() {
               <span className="font-medium">Session ID:</span> {session.session_id}<br />
               <span className="font-medium">Started:</span> {new Date(session.started_at).toLocaleString()}<br />
               <span className="font-medium">Ended:</span> {new Date(session.ended_at).toLocaleString()}<br />
-              <span className="font-medium">Messages:</span> {session.messages.length}
+              <span className="font-medium">Messages:</span> {displayMessages.length}
             </div>
             <div className="bg-white rounded-lg shadow p-4 space-y-4">
-              {session.messages.map((msg) => (
+              {displayMessages.map((msg) => (
                 <div
                   key={msg.id}
                   className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}

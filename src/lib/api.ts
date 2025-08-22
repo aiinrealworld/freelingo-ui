@@ -15,9 +15,46 @@ interface WordCreate {
   example?: string
 }
 
+// New transcript schema types
+interface AiReply {
+  text: string;
+  word_count: number;
+}
+
+interface RuleChecks {
+  one_sentence: boolean;
+  max_eight_words: boolean;
+  used_only_allowed_vocabulary: boolean;
+  no_corrections_or_translations: boolean;
+}
+
+interface VocabularyChallenge {
+  tags: string[];
+  description: string;
+}
+
+interface Rationale {
+  rule_checks: RuleChecks;
+  reasoning_summary: string;
+  vocabulary_challenge: VocabularyChallenge;
+}
+
+interface AiTurn {
+  ai_reply: AiReply;
+  rationale: Rationale;
+}
+
+interface UserTurn {
+  text: string;
+}
+
+interface TranscriptEntry {
+  ai_turn: AiTurn;
+  user_turn: UserTurn;
+}
+
 interface DialogueResponse {
-  response: string
-  suggested_words: string[]
+  transcript: TranscriptEntry[];
 }
 
 interface UserInfo {
@@ -62,7 +99,9 @@ async function handleResponse<T>(response: Response): Promise<T> {
 export interface DialogueSession {
   session_id: string;
   user_id: string;
-  messages: Message[];
+  messages: {
+    transcript: TranscriptEntry[];
+  };
   started_at: string;
   ended_at: string;
 }
@@ -72,6 +111,10 @@ export interface SessionSummary {
   started_at: string;
   ended_at: string;
   message_count: number;
+  // Add optional transcript data for accurate message counting
+  messages?: {
+    transcript: TranscriptEntry[];
+  };
 }
 
 // Define Message type for dialogue sessions

@@ -32,7 +32,7 @@ export function useSpeechSynthesis(options: UseSpeechSynthesisOptions = {}) {
       if (voice) utter.voice = voice;
       utter.onstart = () => setSpeaking(true);
       utter.onend = () => setSpeaking(false);
-      utter.onerror = (e) => {
+      utter.onerror = () => {
         setError('Speech synthesis error');
         setSpeaking(false);
       };

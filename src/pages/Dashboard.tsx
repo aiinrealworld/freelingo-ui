@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Button } from '../components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { useEffect, useState } from 'react'
-import { api, type Word, getDialogueSessions, type SessionSummary } from '../lib/api'
+import { api, type Word, getDialogueSessions, getDialogueSession, type SessionSummary } from '../lib/api'
 import { Link } from 'react-router-dom'
 
 function Dashboard() {
@@ -18,6 +18,7 @@ function Dashboard() {
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(true);
   const [sessionsError, setSessionsError] = useState<string | null>(null);
+  const [messageCounts, setMessageCounts] = useState<Record<string, number>>({});
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -47,6 +48,23 @@ function Dashboard() {
       try {
         const data = await getDialogueSessions(user.uid);
         setSessions(data);
+        
+        // Fetch accurate message counts for each session
+        const counts: Record<string, number> = {};
+        for (const session of data) {
+          try {
+            const fullSession = await getDialogueSession(session.session_id);
+            if (fullSession.messages?.transcript) {
+              counts[session.session_id] = fullSession.messages.transcript.length * 2; // Each entry has AI + user message
+            } else {
+              counts[session.session_id] = session.message_count; // Fallback to backend count
+            }
+          } catch (err) {
+            console.error(`Failed to fetch session ${session.session_id}:`, err);
+            counts[session.session_id] = session.message_count; // Fallback to backend count
+          }
+        }
+        setMessageCounts(counts);
       } catch (err) {
         setSessionsError('Failed to load dialogue sessions.');
       } finally {
@@ -290,7 +308,7 @@ function Dashboard() {
                           <span className="text-sm text-gray-500">{new Date(session.started_at).toLocaleString()}</span>
                         </div>
                         <div className="text-sm text-gray-600 mt-1">
-                          {session.message_count} messages
+                          {messageCounts[session.session_id] || session.message_count} messages
                         </div>
                       </Link>
                     </li>
