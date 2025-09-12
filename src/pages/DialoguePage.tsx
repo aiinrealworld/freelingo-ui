@@ -1,13 +1,12 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { api } from '../lib/api'
+import { api, endCurrentDialogueSession } from '../lib/api'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 
 import { useSpeechToText } from '../lib/useSpeechToText'
 import { useSpeechSynthesis } from '../lib/useSpeechSynthesis'
-import { saveDialogueSession } from '../lib/api'
 
 interface Message {
   id: string
@@ -38,21 +37,22 @@ function DialoguePage() {
       try {
         const response = await api.sendMessage('', user.uid);
         
-        // Extract AI's reply from the transcript
-        if (response.transcript && response.transcript.length > 0) {
-          const lastEntry = response.transcript[response.transcript.length - 1];
-          const aiText = lastEntry.ai_turn.ai_reply.text;
-          
+        // Debug: Log the initial response
+        console.log('Initial API Response:', response)
+        console.log('Initial response text:', response.response)
+        
+        // Extract AI's reply from the simple response
+        if (response.response && response.response.trim()) {
           const aiMessage: Message = {
             id: Date.now().toString(),
-            text: aiText,
+            text: response.response,
             sender: 'ai',
             timestamp: new Date()
           }
-          
           setMessages([aiMessage]);
         } else {
-          // Fallback if no transcript
+          console.warn('No response text in initial response')
+          // Fallback if no response
           const fallbackMessage: Message = {
             id: Date.now().toString(),
             text: 'Bonjour! Comment puis-je vous aider aujourd\'hui?',
@@ -84,8 +84,7 @@ function DialoguePage() {
   const [error, setError] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
-  const [saving, setSaving] = useState(false);
-  const [saveStatus, setSaveStatus] = useState<string | null>(null);
+  const [ending, setEnding] = useState(false);
 
   // Session start and end times are now calculated at save time
 
@@ -175,21 +174,22 @@ function DialoguePage() {
     try {
       const response = await api.sendMessage(inputText, user.uid)
       
-      // Extract AI's reply from the transcript
-      if (response.transcript && response.transcript.length > 0) {
-        const lastEntry = response.transcript[response.transcript.length - 1];
-        const aiText = lastEntry.ai_turn.ai_reply.text;
-        
+      // Debug: Log the full response
+      console.log('API Response:', response)
+      console.log('Response text:', response.response)
+      
+      // Extract AI's reply from the simple response
+      if (response.response && response.response.trim()) {
         const aiMessage: Message = {
           id: (Date.now() + 1).toString(),
-          text: aiText,
+          text: response.response,
           sender: 'ai',
           timestamp: new Date()
         }
-
         setMessages(prev => [...prev, aiMessage])
       } else {
-        // Fallback if no transcript
+        console.warn('No response text from backend')
+        // Fallback if no response
         const fallbackMessage: Message = {
           id: (Date.now() + 1).toString(),
           text: 'Je ne comprends pas. Pouvez-vous répéter?',
@@ -226,47 +226,44 @@ function DialoguePage() {
   };
 
   const handleEndSession = async () => {
-    if (user?.uid && messages.length > 0) {
-      try {
-        // Calculate session times at the moment of saving
-        const currentSessionStart = messages.length > 0 ? new Date(messages[0].timestamp).toISOString() : '';
-        const currentSessionEnd = messages.length > 0 ? new Date(messages[messages.length - 1].timestamp).toISOString() : '';
-        
-        // Convert timestamps to ISO strings for backend
-        const messagesToSave = messages.map(m => ({ ...m, timestamp: new Date(m.timestamp).toISOString() }));
-        await saveDialogueSession(user.uid, messagesToSave, currentSessionStart, currentSessionEnd);
-        // Navigate immediately after saving
-        navigate('/dashboard');
-      } catch (err) {
-        console.error('Failed to save session:', err);
-        // Still navigate away even if save fails
-        navigate('/dashboard');
-      }
-    } else {
-      // If no messages or no user, just navigate away
+    console.log('End Session clicked!');
+    console.log('User UID:', user?.uid);
+    console.log('Messages count:', messages.length);
+    
+    if (!user?.uid) {
+      console.log('No user UID, navigating to dashboard');
       navigate('/dashboard');
+      return;
+    }
+    
+    try {
+      console.log('Setting ending state to true');
+      setEnding(true);
+      setError(null);
+      
+      if (isListening) {
+        console.log('Stopping listening');
+        stopListening();
+      }
+      
+      console.log('Calling endCurrentDialogueSession...');
+      const sessionResults = await endCurrentDialogueSession(user.uid);
+      console.log('Session results received:', sessionResults);
+      
+      // Navigate to results page with session data
+      console.log('Navigating to session results page');
+      navigate('/session-results', { state: { sessionResults } });
+    } catch (err) {
+      console.error('Failed to end session:', err);
+      console.log('Navigating to dashboard due to error');
+      // Still navigate to dashboard even if session end fails
+      navigate('/dashboard');
+    } finally {
+      console.log('Setting ending state to false');
+      setEnding(false);
     }
   }
 
-  const handleSaveSession = async () => {
-    if (!user?.uid || messages.length === 0) return;
-    setSaving(true);
-    setSaveStatus(null);
-    try {
-      // Calculate session times at the moment of saving
-      const currentSessionStart = messages.length > 0 ? new Date(messages[0].timestamp).toISOString() : '';
-      const currentSessionEnd = messages.length > 0 ? new Date(messages[messages.length - 1].timestamp).toISOString() : '';
-      
-      // Convert timestamps to ISO strings for backend
-      const messagesToSave = messages.map(m => ({ ...m, timestamp: new Date(m.timestamp).toISOString() }));
-      await saveDialogueSession(user.uid, messagesToSave, currentSessionStart, currentSessionEnd);
-      setSaveStatus('Session saved!');
-    } catch (err) {
-      setSaveStatus('Failed to save session.');
-    } finally {
-      setSaving(false);
-    }
-  };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -292,27 +289,14 @@ function DialoguePage() {
                 variant="outline"
                 size="sm"
                 onClick={handleEndSession}
+                disabled={ending || !user?.uid}
               >
-                End Session
-              </Button>
-              <Button
-                variant="default"
-                size="sm"
-                onClick={handleSaveSession}
-                disabled={saving || messages.length === 0}
-              >
-                {saving ? 'Saving...' : 'Save Session'}
+                {ending ? 'Ending…' : 'End Session'}
               </Button>
             </div>
           </div>
         </div>
       </header>
-      {/* Show save status */}
-      {saveStatus && (
-        <div className={`max-w-4xl mx-auto mt-2 px-4`}>
-          <div className={`rounded p-2 text-center ${saveStatus.includes('saved') ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{saveStatus}</div>
-        </div>
-      )}
 
       {/* Progress Bar */}
       <div className="bg-white border-b px-4 py-3">

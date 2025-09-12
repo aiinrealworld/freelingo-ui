@@ -54,7 +54,7 @@ interface TranscriptEntry {
 }
 
 interface DialogueResponse {
-  transcript: TranscriptEntry[];
+  response: string;
 }
 
 interface UserInfo {
@@ -125,6 +125,43 @@ export interface Message {
   timestamp: string;
 }
 
+// Types for end-of-session workflow response
+export interface EndSessionMistakeItem {
+  what_you_said: string;
+  simple_explanation: string;
+  better_way: string;
+}
+
+export interface EndSessionFeedback {
+  strengths: string[] | null;
+  mistakes: EndSessionMistakeItem[] | null;
+  conversation_examples: string[] | null;
+}
+
+export interface EndSessionNewWordsUsagesItem {
+  fr: string;
+  en: string;
+}
+
+export interface EndSessionNewWords {
+  new_words: string[] | null;
+  usages: Record<string, EndSessionNewWordsUsagesItem> | null;
+}
+
+export interface EndSessionSummary {
+  total_exchanges: number | null;
+  vocabulary_used: number | null;
+  session_duration: number | null;
+}
+
+export interface EndSessionResponse {
+  session_id: string;
+  status: 'saved';
+  feedback: EndSessionFeedback | null;
+  new_words: EndSessionNewWords | null;
+  session_summary: EndSessionSummary | null;
+}
+
 // Save a dialogue session
 export async function saveDialogueSession(userId: string, messages: any[], startedAt: string, endedAt: string) {
   const token = await getAuthToken();
@@ -137,6 +174,31 @@ export async function saveDialogueSession(userId: string, messages: any[], start
     body: JSON.stringify({ user_id: userId, messages, started_at: startedAt, ended_at: endedAt })
   });
   return handleResponse<{ session_id: string, status: string }>(response);
+}
+
+// End current dialogue session and trigger feedback/new words generation
+export async function endCurrentDialogueSession(userId: string) {
+  console.log('endCurrentDialogueSession called with userId:', userId);
+  const token = await getAuthToken();
+  console.log('Auth token:', token ? 'present' : 'missing');
+  
+  const url = `${API_BASE}/dialogue-session/end/${userId}`;
+  console.log('Making request to:', url);
+  
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    }
+  });
+  
+  console.log('Response status:', response.status);
+  console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+  
+  const result = await handleResponse<EndSessionResponse>(response);
+  console.log('Parsed result:', result);
+  return result;
 }
 
 // List dialogue sessions
@@ -243,6 +305,8 @@ export const api = {
   // Dialogue with AI
   async sendMessage(message: string, userId: string): Promise<DialogueResponse> {
     const token = await getAuthToken()
+    console.log('Sending message to API:', { message, userId, token: token ? 'present' : 'missing' })
+    
     const response = await fetch(`${API_BASE}/dialogue`, {
       method: 'POST',
       headers: {
@@ -251,7 +315,13 @@ export const api = {
       },
       body: JSON.stringify({ message, user_id: userId })
     })
-    return handleResponse<DialogueResponse>(response)
+    
+    console.log('API Response status:', response.status)
+    console.log('API Response headers:', Object.fromEntries(response.headers.entries()))
+    
+    const result = await handleResponse<DialogueResponse>(response)
+    console.log('Parsed API result:', result)
+    return result
   },
 
   // Fetch new words with examples for the user
